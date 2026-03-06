@@ -1495,7 +1495,7 @@
     }
 
     // ── Savings Goals (reactive update with live transfer amount) ──
-    renderGoals(transferNeeded);
+    patchGoals(transferNeeded);
   }
 
   // ══════════════════════════════════════════════
@@ -1529,19 +1529,83 @@
     const g = goals.find(g => g.id === id);
     if (!g) return;
     g[field] = value;
-    renderGoals();
-    saveState();
+    patchGoals(); // never rebuild DOM while typing
+    clearTimeout(updateGoal._t);
+    updateGoal._t = setTimeout(saveState, 600);
+  }
+
+  // Lightweight patch — only update computed/readonly values, never touch input elements
+  function patchGoals(transferPerPaycheck) {
+    const list = document.getElementById('goalList');
+    if (!list || !goals.length) return;
+
+    const transferEl = document.getElementById('savingsAmount');
+    const transfer   = transferPerPaycheck !== undefined
+      ? transferPerPaycheck
+      : (transferEl ? (parseFloat(transferEl.textContent.replace(/[^0-9.-]/g,'')) || 0) : 0);
+
+    const sorted = [...goals].sort((a,b) => a.priority - b.priority);
+    let remaining = transfer;
+
+    sorted.forEach(g => {
+      const card = document.querySelector(`[data-goalcard="${g.id}"]`);
+      if (!card) return;
+
+      const target     = parseFloat(g.target)  || 0;
+      const current    = parseFloat(g.current) || 0;
+      const need       = Math.max(0, target - current);
+      const pct        = target > 0 ? Math.min(100, Math.round((current / target) * 100)) : 0;
+      const isComplete = target > 0 && current >= target;
+      const allotted   = Math.min(remaining, need);
+      remaining        = Math.max(0, remaining - allotted);
+
+      let paychecksLabel = '—';
+      if (isComplete)                      paychecksLabel = '🎉 Funded!';
+      else if (need > 0 && allotted > 0)   paychecksLabel = Math.ceil(need / allotted) === 1 ? '1 paycheck' : Math.ceil(need / allotted) + ' paychecks';
+      else if (need > 0 && allotted === 0) paychecksLabel = 'after higher goals';
+
+      // Card class
+      card.className = 'goal-card' + (isComplete ? ' goal-complete' : '');
+
+      // Priority badge
+      const badge = card.querySelector('.goal-priority-badge');
+      if (badge) {
+        badge.textContent = g.priority;
+        badge.className = 'goal-priority-badge' + (g.priority === 1 ? ' priority-1' : '');
+        badge.title = `Priority ${g.priority} — click to bump up`;
+      }
+
+      // Complete badge
+      const actions = card.querySelector('.goal-actions');
+      if (actions) {
+        const existing = actions.querySelector('.goal-complete-badge');
+        if (isComplete && !existing) {
+          const span = document.createElement('span');
+          span.className = 'goal-complete-badge';
+          span.textContent = '✓ Goal Reached';
+          actions.insertBefore(span, actions.firstChild);
+        } else if (!isComplete && existing) {
+          existing.remove();
+        }
+      }
+
+      // Readonly completion input
+      const readonlyInput = card.querySelector('input[readonly]');
+      if (readonlyInput) readonlyInput.value = paychecksLabel;
+
+      // Progress bar
+      const fill = card.querySelector('.goal-progress-fill');
+      if (fill) fill.style.width = pct + '%';
+      const metaSpans = card.querySelectorAll('.goal-progress-meta span');
+      if (metaSpans[0]) metaSpans[0].textContent = pct + '% funded';
+      if (metaSpans[1]) metaSpans[1].textContent = isComplete ? 'Complete!' : (target > 0 ? fmt(need) + ' remaining' : 'set a target');
+    });
   }
 
   function moveGoalPriority(id) {
-    // Cycle this goal to priority 1, shift others down
     const g = goals.find(g => g.id === id);
     if (!g) return;
-    const sorted = [...goals].sort((a,b) => a.priority - b.priority);
-    const idx    = sorted.findIndex(g2 => g2.id === id);
-    // Rotate: clicking bumps priority up by 1, wraps around
     const newPri = g.priority === 1 ? goals.length : g.priority - 1;
-    // Swap with whatever currently has that priority
     const swap = goals.find(g2 => g2.priority === newPri);
     if (swap) swap.priority = g.priority;
     g.priority = newPri;
