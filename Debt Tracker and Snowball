@@ -217,7 +217,29 @@
   .result-card.warn .result-value { color: #ff8a75; }
   .result-sub { font-size: 10px; color: rgba(255,255,255,0.3); margin-top: 6px; }
 
-  /* Breakdown */
+  /* 80/10/10 Split */
+  .split-section { margin-top: 24px; padding-top: 20px; border-top: 1px solid rgba(255,255,255,0.08); }
+  .split-label-row { display: flex; justify-content: space-between; align-items: center; margin-bottom: 10px; }
+  .split-label-row span:first-child { font-size: 9px; letter-spacing: 3px; text-transform: uppercase; color: rgba(255,255,255,0.25); }
+  .split-warn { font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: #d4a843; background: rgba(212,168,67,0.1); border: 1px solid rgba(212,168,67,0.25); border-radius: 2px; padding: 2px 8px; }
+  .split-bar-wrap { display: flex; height: 10px; border-radius: 3px; overflow: hidden; margin-bottom: 12px; gap: 2px; }
+  .split-bar-bills   { background: var(--accent); transition: width 0.4s ease; border-radius: 2px; }
+  .split-bar-debt    { background: #8b5cf6;        transition: width 0.4s ease; border-radius: 2px; }
+  .split-bar-savings { background: #2d6a4f;        transition: width 0.4s ease; border-radius: 2px; }
+  .split-bar-free    { background: rgba(255,255,255,0.12); transition: width 0.4s ease; border-radius: 2px; flex: 1; }
+  .split-cards { display: grid; grid-template-columns: repeat(4, 1fr); gap: 10px; }
+  .split-card { background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.07); border-radius: 2px; padding: 12px 14px; }
+  .split-card.sc-bills   { border-top: 2px solid var(--accent); }
+  .split-card.sc-debt    { border-top: 2px solid #8b5cf6; }
+  .split-card.sc-savings { border-top: 2px solid #2d6a4f; }
+  .split-card.sc-free    { border-top: 2px solid rgba(255,255,255,0.2); }
+  .split-card-lbl { font-size: 8px; letter-spacing: 2px; text-transform: uppercase; color: rgba(255,255,255,0.3); margin-bottom: 6px; }
+  .split-card-val { font-family: 'Playfair Display', serif; font-size: 20px; font-weight: 700; color: var(--paper); line-height: 1; }
+  .split-card.sc-debt    .split-card-val { color: #c4b5fd; }
+  .split-card.sc-savings .split-card-val { color: #74c69d; }
+  .split-card-pct { font-size: 10px; color: rgba(255,255,255,0.25); margin-top: 4px; }
+  .split-card.sc-warn .split-card-pct { color: #d4a843; }
+  @media (max-width: 640px) { .split-cards { grid-template-columns: 1fr 1fr; } }
   .breakdown { margin-top: 24px; border-top: 1px solid rgba(255,255,255,0.08); padding-top: 20px; }
   .breakdown-title { font-size: 9px; letter-spacing: 3px; text-transform: uppercase; color: rgba(255,255,255,0.25); margin-bottom: 16px; }
 
@@ -591,8 +613,30 @@
   #tab-snowball .section-label { color: #8b5cf6; }
   #tab-snowball .section-label::after { background: rgba(139,92,246,0.2); }
 
-  @media (max-width: 640px) {
-    .ledger-body { padding: 0 20px 32px; }
+  /* Export / Import */
+  .data-btns { display: flex; gap: 8px; margin-top: 16px; }
+  .data-btn {
+    background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 2px; padding: 6px 14px; font-family: 'DM Mono', monospace;
+    font-size: 10px; letter-spacing: 1px; text-transform: uppercase;
+    color: rgba(255,255,255,0.45); cursor: pointer; transition: all 0.15s;
+  }
+  .data-btn:hover { background: rgba(255,255,255,0.12); color: var(--paper); border-color: rgba(255,255,255,0.35); }
+  .data-btn.import-btn:hover { border-color: var(--gold); color: var(--gold); background: rgba(212,168,67,0.08); }
+  #importFileInput { display: none; }
+
+  .toast {
+    position: fixed; bottom: 28px; left: 50%; transform: translateX(-50%) translateY(20px);
+    background: var(--ink); border: 1px solid rgba(255,255,255,0.15);
+    border-radius: 3px; padding: 10px 20px; font-family: 'DM Mono', monospace;
+    font-size: 11px; letter-spacing: 1px; color: var(--paper);
+    opacity: 0; transition: opacity 0.2s, transform 0.2s; pointer-events: none; z-index: 999;
+    white-space: nowrap;
+  }
+  .toast.show { opacity: 1; transform: translateX(-50%) translateY(0); }
+  .toast.success { border-color: rgba(45,106,79,0.6); color: #74c69d; }
+  .toast.error   { border-color: rgba(200,75,49,0.6);  color: #ff8a75; }
+
     .ledger-header { padding: 24px 20px; }
     .ledger-header::after { display: none; }
     .pay-grid { grid-template-columns: 1fr 1fr; }
@@ -615,7 +659,14 @@
       <button class="tab-btn active" onclick="switchTab('budget')">Budget</button>
       <button class="tab-btn" onclick="switchTab('snowball')">Debt Snowball</button>
     </div>
+    <div class="data-btns">
+      <button class="data-btn" onclick="exportData()">⬇ Export Backup</button>
+      <button class="data-btn import-btn" onclick="document.getElementById('importFileInput').click()">⬆ Import Backup</button>
+      <input type="file" id="importFileInput" accept=".json" onchange="importData(event)">
+    </div>
   </div>
+
+  <div class="toast" id="toast"></div>
 
   <!-- ══ BUDGET TAB ══ -->
   <div id="tab-budget" class="tab-panel active" style="display:block;">
@@ -672,7 +723,7 @@
     <div class="results">
       <div style="font-size:10px;letter-spacing:3px;text-transform:uppercase;color:rgba(255,255,255,0.3);">Per Paycheck Summary</div>
 
-      <!-- Top row: Paycheck → Transfer → Spending -->
+      <!-- Top row: Paycheck → Bills Transfer → Spending -->
       <div class="results-grid" style="margin-top:20px;">
         <div class="result-card">
           <div class="result-label">Paycheck (Net)</div>
@@ -680,14 +731,50 @@
           <div class="result-sub">deposited to checking</div>
         </div>
         <div class="result-card highlight" id="transferCard">
-          <div class="result-label">Transfer to Savings</div>
+          <div class="result-label">Bills Transfer</div>
           <div class="result-value" id="savingsAmount">$0</div>
-          <div class="result-sub">covers all bills &amp; debt</div>
+          <div class="result-sub">covers all bills &amp; one-offs</div>
         </div>
         <div class="result-card" id="spendingCard">
           <div class="result-label">Left in Checking</div>
           <div class="result-value" id="spendingLeft">$0</div>
           <div class="result-sub">yours to spend freely</div>
+        </div>
+      </div>
+
+      <!-- 80/10/10 Split -->
+      <div class="split-section">
+        <div class="split-label-row">
+          <span>80 / 10 / 10 Split</span>
+          <span class="split-warn" id="splitWarn" style="display:none;">⚠ Bills exceed 80%</span>
+        </div>
+        <div class="split-bar-wrap">
+          <div class="split-bar-bills"   id="splitBarBills"   style="width:0%"></div>
+          <div class="split-bar-debt"    id="splitBarDebt"    style="width:10%"></div>
+          <div class="split-bar-savings" id="splitBarSavings" style="width:10%"></div>
+          <div class="split-bar-free"    id="splitBarFree"></div>
+        </div>
+        <div class="split-cards">
+          <div class="split-card sc-bills" id="splitCardBills">
+            <div class="split-card-lbl">Bills (80%)</div>
+            <div class="split-card-val" id="splitBillsAmt">$0</div>
+            <div class="split-card-pct" id="splitBillsPct">0% of paycheck</div>
+          </div>
+          <div class="split-card sc-debt">
+            <div class="split-card-lbl">Debt Snowball (10%)</div>
+            <div class="split-card-val" id="splitDebtAmt">$0</div>
+            <div class="split-card-pct">auto-sent to snowball</div>
+          </div>
+          <div class="split-card sc-savings">
+            <div class="split-card-lbl">Separate Savings (10%)</div>
+            <div class="split-card-val" id="splitSavingsAmt">$0</div>
+            <div class="split-card-pct">separate account</div>
+          </div>
+          <div class="split-card sc-free">
+            <div class="split-card-lbl">Remaining / Buffer</div>
+            <div class="split-card-val" id="splitFreeAmt">$0</div>
+            <div class="split-card-pct" id="splitFreePct">after split</div>
+          </div>
         </div>
       </div>
 
@@ -1305,6 +1392,38 @@
     const transCard = document.getElementById('transferCard');
     transCard.className = 'result-card highlight' + (transferNeeded > totalIncome ? ' warn' : '');
 
+    // ── 80/10/10 Split (based on net paycheck) ──
+    const split10Debt    = totalIncome * 0.10;
+    const split10Savings = totalIncome * 0.10;
+    const split80        = totalIncome * 0.80;
+    const billsPct       = totalIncome > 0 ? (transferNeeded / totalIncome) * 100 : 0;
+    const billsOverBudget = billsPct > 80;
+    const splitFree      = totalIncome - transferNeeded - split10Debt - split10Savings;
+
+    // Bar widths (bills fill their actual %, debt/savings always 10% each, free gets rest)
+    const barBillsPct = totalIncome > 0 ? Math.min(80, (transferNeeded / totalIncome) * 100) : 0;
+    document.getElementById('splitBarBills').style.width   = barBillsPct + '%';
+    document.getElementById('splitBarDebt').style.width    = totalIncome > 0 ? '10%' : '0%';
+    document.getElementById('splitBarSavings').style.width = totalIncome > 0 ? '10%' : '0%';
+
+    document.getElementById('splitBillsAmt').textContent  = fmt(transferNeeded);
+    document.getElementById('splitDebtAmt').textContent   = fmt(split10Debt);
+    document.getElementById('splitSavingsAmt').textContent= fmt(split10Savings);
+    document.getElementById('splitFreeAmt').textContent   = fmt(Math.max(0, splitFree));
+    document.getElementById('splitBillsPct').textContent  = Math.round(billsPct) + '% of paycheck';
+    document.getElementById('splitFreePct').textContent   = splitFree < 0 ? '⚠ over budget' : 'after split';
+
+    const splitWarn = document.getElementById('splitWarn');
+    splitWarn.style.display = billsOverBudget ? 'inline-block' : 'none';
+    document.getElementById('splitCardBills').className = 'split-card sc-bills' + (billsOverBudget ? ' sc-warn' : '');
+
+    // Auto-populate snowball extra field with the 10% debt amount
+    const sbExtraEl = document.getElementById('sb-extra');
+    if (sbExtraEl && totalIncome > 0) {
+      sbExtraEl.value = split10Debt.toFixed(2);
+      sbPatchCalc(); // refresh snowball with new extra
+    }
+
     // ── Breakdown section ──
     const bSec  = document.getElementById('breakdownSection');
     const bRows = document.getElementById('breakdownRows');
@@ -1518,6 +1637,69 @@
         </div>`;
       list.appendChild(card);
     });
+  }
+
+  // ══════════════════════════════════════════════
+  //  EXPORT / IMPORT
+  // ══════════════════════════════════════════════
+  let _toastTimer = null;
+  function showToast(msg, type = 'success') {
+    const t = document.getElementById('toast');
+    t.textContent = msg;
+    t.className = 'toast ' + type + ' show';
+    clearTimeout(_toastTimer);
+    _toastTimer = setTimeout(() => { t.className = 'toast ' + type; }, 3000);
+  }
+
+  function exportData() {
+    try {
+      const raw = localStorage.getItem(STORAGE_KEY);
+      if (!raw) { showToast('Nothing to export yet.', 'error'); return; }
+      const blob = new Blob([raw], { type: 'application/json' });
+      const url  = URL.createObjectURL(blob);
+      const now  = new Date();
+      const stamp = now.getFullYear() + '-' +
+        String(now.getMonth()+1).padStart(2,'0') + '-' +
+        String(now.getDate()).padStart(2,'0');
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'paycheck-planner-backup-' + stamp + '.json';
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('✓ Backup downloaded successfully', 'success');
+    } catch(e) {
+      showToast('Export failed: ' + e.message, 'error');
+    }
+  }
+
+  function importData(event) {
+    const file = event.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+      try {
+        const parsed = JSON.parse(e.target.result);
+        // Validate it looks like our data
+        if (typeof parsed !== 'object' || parsed === null) throw new Error('Invalid file format');
+        const hasExpectedKeys = ['categories','sbDebts','goals'].some(k => k in parsed);
+        if (!hasExpectedKeys) throw new Error('File does not appear to be a Paycheck Planner backup');
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(parsed));
+        // Reload state into app
+        if (loadState()) {
+          renderCategories();
+          renderOneoffs();
+          renderGoals();
+          sbRender();
+          calculate();
+          showToast('✓ Backup restored successfully', 'success');
+        }
+      } catch(err) {
+        showToast('Import failed: ' + err.message, 'error');
+      }
+      // Reset input so same file can be re-imported if needed
+      event.target.value = '';
+    };
+    reader.readAsText(file);
   }
 
   // ══════════════════════════════════════════════
