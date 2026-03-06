@@ -2,6 +2,8 @@
 
 A free, single-file budgeting tool built for the **NeighborhoodofMusic** community. No accounts, no subscriptions, no data sent anywhere — everything runs entirely in your browser.
 
+> ⚠️ **This is a planning tool, not a tracker.** It does not connect to your bank, sync transactions, or automatically update balances. All numbers are entered and maintained by you manually. Think of it as a smart, interactive budget worksheet.
+
 ---
 
 ## Features
