@@ -27,7 +27,7 @@ A free, single-file budgeting tool built for the **NeighborhoodofMusic** communi
 
 ## How to Use
 
-1. Open `index.html` in any modern web browser — no installation required
+1. Open `Debt Tracker and Snowball.html` in any modern web browser — no installation required
 2. Fill in your income and bills on the **Budget** tab
 3. Switch to the **Debt Snowball** tab and add your debts
 4. Your data saves automatically as you type
