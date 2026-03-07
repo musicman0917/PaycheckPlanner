@@ -384,7 +384,7 @@
   .goal-complete-badge { font-size: 9px; letter-spacing: 1px; text-transform: uppercase; background: rgba(45,106,79,0.2); color: #74c69d; border: 1px solid rgba(45,106,79,0.4); border-radius: 6px; padding: 2px 8px; }
   .goal-delete-btn { background: none; border: none; cursor: pointer; color: rgba(255,255,255,0.2); font-size: 18px; line-height: 1; transition: color 0.15s, transform 0.15s; padding: 0 2px; }
   .goal-delete-btn:hover { color: var(--accent); transform: scale(1.2); }
-  .goal-fields { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; margin-bottom: 14px; }
+  .goal-fields { display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px; margin-bottom: 14px; }
   .goal-field { display: flex; flex-direction: column; gap: 4px; }
   .goal-field label { font-size: 9px; letter-spacing: 1px; text-transform: uppercase; color: rgba(255,255,255,0.3); }
   .goal-field input { background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1); border-radius: 8px; padding: 8px 10px; font-family: 'DM Mono', monospace; font-size: 13px; color: var(--paper); outline: none; width: 100%; transition: border-color 0.2s; }
@@ -397,6 +397,10 @@
   .goal-progress-track { height: 6px; background: rgba(255,255,255,0.07); border-radius: 4px; overflow: hidden; }
   .goal-progress-fill { height: 100%; border-radius: 4px; background: linear-gradient(90deg, var(--green), #74c69d); transition: width 0.5s ease; }
   .goal-card.goal-complete .goal-progress-fill { background: linear-gradient(90deg, #2d6a4f, #74c69d); }
+  .goal-card.goal-late { border-color: rgba(200,75,49,0.5); background: rgba(200,75,49,0.06); }
+  .goal-min-display { font-weight: 500; }
+  .goal-min-warn { color: #d4a843 !important; }
+  .goal-min-late { color: #ff8a75 !important; }
   .goals-empty { font-size: 11px; color: rgba(255,255,255,0.2); text-align: center; padding: 20px 0; letter-spacing: 1px; }
 
   /* ══ THEME VARIABLES ══ */
@@ -1526,7 +1530,7 @@
   function addGoal() {
     const id       = goalId++;
     const priority = goals.length + 1;
-    goals.push({ id, name: '', target: '', current: '', priority });
+    goals.push({ id, name: '', target: '', current: '', priority, deadline: '' });
     renderGoals();
     saveState();
     setTimeout(() => {
@@ -1553,7 +1557,6 @@
     updateGoal._t = setTimeout(saveState, 600);
   }
 
-  // Lightweight patch — only update computed/readonly values, never touch input elements
   function patchGoals(transferPerPaycheck) {
     const list = document.getElementById('goalList');
     if (!list || !goals.length) return;
@@ -1562,6 +1565,10 @@
     const transfer   = transferPerPaycheck !== undefined
       ? transferPerPaycheck
       : (transferEl ? (parseFloat(transferEl.textContent.replace(/[^0-9.-]/g,'')) || 0) : 0);
+
+    const paychecksPerYear = { weekly:52, biweekly:26, semimonthly:24, monthly:12 }[
+      document.getElementById('payFrequency')?.value || 'biweekly'
+    ] || 26;
 
     const sorted = [...goals].sort((a,b) => a.priority - b.priority);
     let remaining = transfer;
@@ -1578,13 +1585,15 @@
       const allotted   = Math.min(remaining, need);
       remaining        = Math.max(0, remaining - allotted);
 
-      let paychecksLabel = '—';
-      if (isComplete)                      paychecksLabel = '🎉 Funded!';
-      else if (need > 0 && allotted > 0)   paychecksLabel = Math.ceil(need / allotted) === 1 ? '1 paycheck' : Math.ceil(need / allotted) + ' paychecks';
-      else if (need > 0 && allotted === 0) paychecksLabel = 'after higher goals';
+      const { minPerPaycheck, paychecksLeft, isLate } = calcGoalMin(g, paychecksPerYear);
+      const minLabel = isComplete ? '🎉 Funded!'
+        : isLate                  ? '⚠ Past due!'
+        : minPerPaycheck > 0      ? fmt(minPerPaycheck) + '/paycheck'
+        : '—';
+      const minClass = isLate ? 'goal-min-late' : (minPerPaycheck > 0 && transfer > 0 && minPerPaycheck > transfer ? 'goal-min-warn' : '');
 
       // Card class
-      card.className = 'goal-card' + (isComplete ? ' goal-complete' : '');
+      card.className = 'goal-card' + (isComplete ? ' goal-complete' : '') + (isLate ? ' goal-late' : '');
 
       // Priority badge
       const badge = card.querySelector('.goal-priority-badge');
@@ -1608,16 +1617,19 @@
         }
       }
 
-      // Readonly completion input
-      const readonlyInput = card.querySelector('input[readonly]');
-      if (readonlyInput) readonlyInput.value = paychecksLabel;
+      // Min/paycheck readonly display
+      const minDisplay = card.querySelector('.goal-min-display');
+      if (minDisplay) {
+        minDisplay.value = minLabel;
+        minDisplay.className = 'goal-min-display' + (minClass ? ' ' + minClass : '');
+      }
 
       // Progress bar
       const fill = card.querySelector('.goal-progress-fill');
       if (fill) fill.style.width = pct + '%';
       const metaSpans = card.querySelectorAll('.goal-progress-meta span');
       if (metaSpans[0]) metaSpans[0].textContent = pct + '% funded';
-      if (metaSpans[1]) metaSpans[1].textContent = isComplete ? 'Complete!' : (target > 0 ? fmt(need) + ' remaining' : 'set a target');
+      if (metaSpans[1]) metaSpans[1].textContent = (isComplete ? 'Complete!' : (target > 0 ? fmt(need) + ' remaining' : 'set a target')) + (paychecksLeft > 0 && !isComplete ? ' · ' + paychecksLeft + ' paychecks left' : '');
     });
   }
 
@@ -1632,53 +1644,72 @@
     saveState();
   }
 
+  function calcGoalMin(g, paychecksPerYear) {
+    // Returns { minPerPaycheck, paychecksLeft, isLate, deadlineLabel }
+    const target  = parseFloat(g.target)  || 0;
+    const current = parseFloat(g.current) || 0;
+    const need    = Math.max(0, target - current);
+    if (!g.deadline || need <= 0) return { minPerPaycheck: 0, paychecksLeft: null, isLate: false, deadlineLabel: '—' };
+
+    const today    = new Date(); today.setHours(0,0,0,0);
+    const due      = new Date(g.deadline + 'T00:00:00');
+    const msLeft   = due - today;
+    const daysLeft = Math.ceil(msLeft / 86400000);
+
+    if (daysLeft <= 0) return { minPerPaycheck: 0, paychecksLeft: 0, isLate: true, deadlineLabel: 'Past due!' };
+
+    const freq = document.getElementById('payFrequency')?.value || 'biweekly';
+    const daysPerPaycheck = { weekly:7, biweekly:14, semimonthly:15.2, monthly:30.4 }[freq] || 14;
+    const paychecksLeft   = Math.max(1, Math.ceil(daysLeft / daysPerPaycheck));
+    const minPerPaycheck  = need / paychecksLeft;
+
+    const monthNames = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+    const deadlineLabel = monthNames[due.getMonth()] + ' ' + due.getFullYear();
+
+    return { minPerPaycheck, paychecksLeft, isLate: false, deadlineLabel };
+  }
+
   function renderGoals(transferPerPaycheck) {
-    // transferPerPaycheck is optional — if not passed, try to read it from the DOM
     const list = document.getElementById('goalList');
     if (!list) return;
 
-    // Get the current transfer amount from the results panel
     const transferEl = document.getElementById('savingsAmount');
     const transfer   = transferPerPaycheck !== undefined
       ? transferPerPaycheck
       : (transferEl ? (parseFloat(transferEl.textContent.replace(/[^0-9.-]/g,'')) || 0) : 0);
+
+    const paychecksPerYear = { weekly:52, biweekly:26, semimonthly:24, monthly:12 }[
+      document.getElementById('payFrequency')?.value || 'biweekly'
+    ] || 26;
 
     if (!goals.length) {
       list.innerHTML = '<div class="goals-empty">No goals yet — add one above to start tracking.</div>';
       return;
     }
 
-    // Sort by priority for display and waterfall math
     const sorted = [...goals].sort((a,b) => a.priority - b.priority);
-
-    // Waterfall: highest priority goal gets filled first each paycheck
     let remaining = transfer;
 
     list.innerHTML = '';
     sorted.forEach((g, rankIdx) => {
-      const target  = parseFloat(g.target)  || 0;
-      const current = parseFloat(g.current) || 0;
-      const need    = Math.max(0, target - current);
-      const pct     = target > 0 ? Math.min(100, Math.round((current / target) * 100)) : 0;
+      const target     = parseFloat(g.target)  || 0;
+      const current    = parseFloat(g.current) || 0;
+      const need       = Math.max(0, target - current);
+      const pct        = target > 0 ? Math.min(100, Math.round((current / target) * 100)) : 0;
       const isComplete = target > 0 && current >= target;
 
-      // How much of this paycheck's transfer goes to this goal
-      const allotted    = Math.min(remaining, need);
-      remaining         = Math.max(0, remaining - allotted);
+      const allotted = Math.min(remaining, need);
+      remaining      = Math.max(0, remaining - allotted);
 
-      // Paychecks to completion for this goal
-      let paychecksLabel = '—';
-      if (isComplete) {
-        paychecksLabel = '🎉 Funded!';
-      } else if (need > 0 && allotted > 0) {
-        const pp = Math.ceil(need / allotted);
-        paychecksLabel = pp === 1 ? '1 paycheck' : pp + ' paychecks';
-      } else if (need > 0 && allotted === 0) {
-        paychecksLabel = 'after higher goals';
-      }
+      const { minPerPaycheck, paychecksLeft, isLate, deadlineLabel } = calcGoalMin(g, paychecksPerYear);
+      const minLabel = isComplete ? '🎉 Funded!'
+        : isLate                  ? '⚠ Past due!'
+        : minPerPaycheck > 0      ? fmt(minPerPaycheck) + '/paycheck'
+        : '—';
+      const minClass = isLate ? 'goal-min-late' : (minPerPaycheck > 0 && transfer > 0 && minPerPaycheck > transfer ? 'goal-min-warn' : '');
 
       const card = document.createElement('div');
-      card.className = 'goal-card' + (isComplete ? ' goal-complete' : '');
+      card.className = 'goal-card' + (isComplete ? ' goal-complete' : '') + (isLate ? ' goal-late' : '');
       card.setAttribute('data-goalcard', g.id);
       card.innerHTML = `
         <div class="goal-card-top">
@@ -1705,14 +1736,19 @@
               oninput="updateGoal(${g.id},'current',this.value)">
           </div>
           <div class="goal-field">
-            <label>Est. Completion</label>
-            <input type="text" value="${paychecksLabel}" readonly>
+            <label>Target Date</label>
+            <input type="date" value="${g.deadline || ''}"
+              oninput="updateGoal(${g.id},'deadline',this.value)">
+          </div>
+          <div class="goal-field goal-field-min">
+            <label>Min / Paycheck</label>
+            <input type="text" class="goal-min-display ${minClass}" value="${minLabel}" readonly>
           </div>
         </div>
         <div class="goal-progress-wrap">
           <div class="goal-progress-meta">
             <span class="goal-pct">${pct}% funded</span>
-            <span>${isComplete ? 'Complete!' : (target > 0 ? fmt(need) + ' remaining' : 'set a target')}</span>
+            <span>${isComplete ? 'Complete!' : (target > 0 ? fmt(need) + ' remaining' : 'set a target')}${paychecksLeft > 0 && !isComplete ? ' · ' + paychecksLeft + ' paychecks left' : ''}</span>
           </div>
           <div class="goal-progress-track">
             <div class="goal-progress-fill" style="width:${pct}%"></div>
